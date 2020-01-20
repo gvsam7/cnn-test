@@ -12,17 +12,18 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 import torch.optim as optim
 
 
 # Data loading and processing
-REBUILD_DATA = True
+REBUILD_DATA = False
+
 
 class DogsVSCats():
     IMG_SIZE = 50  # normalises images on 50 x 50 sizes
-    CATS = "./PetImages/CAT"
-    DOGS = "./PetImages/DOGS"
+    CATS = "PetImages/Cat"
+    DOGS = "PetImages/Dog"
     LABELS = {CATS: 0, DOGS: 1}
     training_data = []
     catcount = 0
@@ -31,7 +32,7 @@ class DogsVSCats():
     def make_training_data(self):
         for label in self.LABELS:
             print(label)
-            for f in tqdm(os.lisdir(label)):
+            for f in tqdm(os.listdir(label)):
                 try:
                     path = os.path.join(label, f)
                     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
@@ -123,7 +124,14 @@ class Net(nn.Module):
         return F.softmax(x, dim=1)
 
 
-net = Net()
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print("Running on the GPU")
+else:
+    device = torch.device("cpu")
+    print("Running on CPU")
+
+net = Net().to(device)
 
 # training loop
 if REBUILD_DATA:
@@ -166,6 +174,8 @@ def train(net):
             batch_X = train_X[i:i+BATCH_SIZE].view(-1, 1, 50, 50)
             batch_y = train_y[i:i+BATCH_SIZE]
 
+            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+
             net.zero_grad()
 
             outputs = net(batch_X)
@@ -182,24 +192,14 @@ def test(net):
     total = 0
     with torch.no_grad():
         for i in tqdm(range(len(test_X))):
-            real_class = torch.argmax(test_y[i])
-            net_out = net(test_X[i].view(-1, 1, 50, 50))[0]  # returns a list
+            real_class = torch.argmax(test_y[i]).to(device)
+            net_out = net(test_X[i].view(-1, 1, 50, 50).to(device))[0]  # returns a list
             predicted_class = torch.argmax(net_out)
 
             if predicted_class == real_class:
                 correct += 1
             total += 1
     print("Accuracy: ", round(correct/total, 3))
-
-
-if torch.cuda.is_available():
-    device = torch.device("cuda:0")
-    print("Running on the GPU")
-else:
-    device = torch.device("cpu")
-    print("Running on CPU")
-
-net = Net().to(device)
 
 
 """
